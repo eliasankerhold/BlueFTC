@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools", "setuptools-scm"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "bluetfc"
+version = "0.1.5"
+authors = [
+    {name = "Elias Ankerhold", email = "elias.ankerhold@aalto.fi"},
+]
+description = "Package to interact and control temperature controllers of BlueFors cryostats using HTTP GET and POST."
+readme = "README.md"
+requires-python = ">=3.6"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Intended Audience :: Science/Research",
+    "Topic :: Scientific/Engineering",
+    "License :: OSI Approved :: MIT License",
+]
+dependencies = [
+    "requests",
+]
