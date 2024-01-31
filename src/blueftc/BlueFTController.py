@@ -35,6 +35,7 @@ class BlueFTController:
         self.heaters = {}
         self.cycle_time = None
         self.time_delta = None
+        self.log_prefix = f'BlueFors Temperature Controller at {self.ip}: '
 
         self.test_mode = test_mode
 
@@ -49,7 +50,6 @@ class BlueFTController:
         self.get_cycle_time()
         self.get_time_delta()
         self.show_overview()
-        self.log_prefix = f'BlueFors Temperature Controller at {self.ip}: '
 
         self.log_info(f"Controller driver initialized.")
 
