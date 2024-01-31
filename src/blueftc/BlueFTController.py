@@ -49,6 +49,7 @@ class BlueFTController:
         self.get_cycle_time()
         self.get_time_delta()
         self.show_overview()
+        self.log_prefix = f'BlueFors Temperature Controller at {self.ip}: '
 
         self.log_info(f"Controller driver initialized.")
 
@@ -74,13 +75,11 @@ class BlueFTController:
             dt = dt - self.time_delta
         return dt.strftime('%Y-%m-%dT%H:%M:%S.%fZ')
 
-    @staticmethod
-    def log_info(msg: str):
-        my_logger.info(msg=msg)
+    def log_info(self, msg: str):
+        my_logger.info(msg=self.log_prefix + msg)
 
-    @staticmethod
-    def log_error(msg: str):
-        my_logger.error(msg=msg)
+    def log_error(self, msg: str):
+        my_logger.error(msg=self.log_prefix + msg)
 
     def _make_endpoint(self, *args):
         return self.http_ip_port + '/' + '/'.join(args)
@@ -107,7 +106,8 @@ class BlueFTController:
         if self.pid_mode_available:
             print("Upper Temp Limit (K) |        P        |        I        |        D        |     Maximum Power (mW)")
             for config in self.pid_config:
-                print(f'{config[0]: 20.3f} | {config[1]: 15.3f} | {config[2]: 15.3f} | {config[3]: 15.3f} | {config[4]: 16.6f}')
+                print(
+                    f'{config[0]: 20.3f} | {config[1]: 15.3f} | {config[2]: 15.3f} | {config[3]: 15.3f} | {config[4]: 16.6f}')
 
     def _pid_sanity_checks(self):
         if self.pid_config.shape[1] != 5:
@@ -260,3 +260,8 @@ class BlueFTController:
                                            'derivative': config[3]},
             'setpoint': temp
         }
+
+        self.generic_request(path, payload)
+
+        self.update_heaters()
+        self.log_info(f'Changed PID parameters: {payload}.')
