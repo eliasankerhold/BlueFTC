@@ -3,6 +3,7 @@ from datetime import datetime, timedelta
 import json
 from logging import Formatter, FileHandler, StreamHandler, INFO, getLogger
 import sys
+import numpy as np
 
 simple_formatter = Formatter("%(levelname)s: %(message)s")
 detailed_formatter = Formatter('[%(asctime)s] %(levelname)s - %(message)s')
@@ -20,27 +21,44 @@ my_logger.addHandler(stdout_handler)
 my_logger.setLevel(INFO)
 
 
+class PIDConfigException(Exception):
+    def __init__(self, msg: str):
+        super().__init__(msg)
+
+
 class BlueFTController:
-    def __init__(self, ip):
+    def __init__(self, ip: str, pid_config: str = None, test_mode: bool = False):
         self.ip = ip
         self.port = 5001
-        self.httpiport = f"http://{self.ip}:{self.port}"
+        self.http_ip_port = f"http://{self.ip}:{self.port}"
         self.channels = {}
         self.heaters = {}
         self.cycle_time = None
         self.time_delta = None
 
+        self.test_mode = test_mode
+
+        self.pif_config_path = pid_config
+        self.pid_mode_available = False
+        self.pid_config = None
+
+        if pid_config is not None:
+            self._read_pid_config()
         self.update_heaters()
         self.update_channels()
         self.get_cycle_time()
         self.get_time_delta()
+        self.show_overview()
 
         self.log_info(f"Controller driver initialized.")
 
     # general functions
 
-    @staticmethod
-    def generic_request(path: str, payload: dict = None):
+    def generic_request(self, path: str, payload: dict = None):
+
+        if self.test_mode:
+            print(f"Virtual request sent to {path} with payload {payload}.")
+            return None
 
         if payload is None:
             response = requests.get(path)
@@ -65,7 +83,7 @@ class BlueFTController:
         my_logger.error(msg=msg)
 
     def _make_endpoint(self, *args):
-        return self.httpiport + '/' + '/'.join(args)
+        return self.http_ip_port + '/' + '/'.join(args)
 
     def _make_past_time_str(self, delta_seconds):
         return self.make_time_str(datetime.now() - timedelta(seconds=delta_seconds))
@@ -84,6 +102,37 @@ class BlueFTController:
         self.generic_request(path=endpoint, payload=payload)
 
         return True
+
+    def print_pid_config(self):
+        if self.pid_mode_available:
+            print("Upper Temp Limit (K) |        P        |        I        |        D        |     Maximum Power (mW)")
+            for config in self.pid_config:
+                print(f'{config[0]: 20.3f} | {config[1]: 15.3f} | {config[2]: 15.3f} | {config[3]: 15.3f} | {config[4]: 16.6f}')
+
+    def _pid_sanity_checks(self):
+        if self.pid_config.shape[1] != 5:
+            raise PIDConfigException(f"Unexpected input shape. Expected (n, 5), received {self.pid_config.shape}")
+
+        for i, upper_limit in enumerate(self.pid_config[1:, 0]):
+            if upper_limit <= self.pid_config[i, 0]:
+                raise PIDConfigException(f"PID temperature ranges are overlapping or inconsistently sorted. "
+                                         f"Problematic limits: {self.pid_config[i, 0]}, {upper_limit}")
+
+    def _read_pid_config(self):
+        try:
+            self.pid_config = np.loadtxt(self.pif_config_path, skiprows=1, delimiter=',')
+            self._pid_sanity_checks()
+            self.pid_mode_available = True
+            self.log_info("Read PID parameters from file. PID mode available.")
+            self.print_pid_config()
+
+        except (FileNotFoundError, PIDConfigException, ValueError) as ex:
+            self.log_error(f"Error while reading PID config: {ex}. PID mode not available!")
+
+    def _find_pid_param_by_range(self, target_temperature: float):
+        for config in self.pid_config:
+            if target_temperature <= config[0]:
+                return config[1:]
 
     # initialization
 
@@ -134,7 +183,7 @@ class BlueFTController:
                   f"[Active]: {channel['active']}")
             coup_heat_ind = int(channel['coupled_heater_nr'])
             if coup_heat_ind != 0 and coup_heat_ind in self.heaters.keys():
-                  print(f"[Coupled Heater]: {self.heaters[coup_heat_ind]['name']} (Number {coup_heat_ind})")
+                print(f"[Coupled Heater]: {self.heaters[coup_heat_ind]['name']} (Number {coup_heat_ind})")
             else:
                 print("[Coupled Heater]: Not coupled")
 
@@ -183,7 +232,8 @@ class BlueFTController:
         path = self._make_endpoint('heater', 'update')
         payload = {
             'heater_nr': heater_nr,
-            'power': setpower * 1e-6
+            'power': setpower * 1e-6,
+            'pid_mode': 0
         }
         self.generic_request(path, payload)
         self.log_info(f"Set heater {heater_nr} to {setpower} uW.")
@@ -197,3 +247,16 @@ class BlueFTController:
         }
         answer = self.generic_request(path, payload)
         return answer['power'] * 1e6
+
+    def set_pid_temperature(self, heater_nr, temp):
+        config = self._find_pid_param_by_range(target_temperature=temp)
+        path = self._make_endpoint('heater')
+        payload = {
+            'heater_nr': heater_nr,
+            'pid_mode': 1,
+            'max_power': config[4],
+            'control_algorithm_settings': {'proportional': config[1],
+                                           'integral': config[2],
+                                           'derivative': config[3]},
+            'setpoint': temp
+        }
