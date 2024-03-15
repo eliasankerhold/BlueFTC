@@ -27,8 +27,9 @@ class PIDConfigException(Exception):
 
 
 class BlueFTController:
-    def __init__(self, ip: str, pid_config: str = None, test_mode: bool = False):
+    def __init__(self, ip: str, pid_config: str = None, test_mode: bool = False, key: str = None):
         self.ip = ip
+        self.key = key
         self.port = 5001
         self.http_ip_port = f"http://{self.ip}:{self.port}"
         self.channels = {}
@@ -54,7 +55,50 @@ class BlueFTController:
         self.log_info(f"Controller driver initialized.")
 
     # general functions
+    
 
+    def get_value_request(self, device : str, target : str):
+        """
+        Get the values currently in the Controller config for the given device
+        """
+        if self.key == None:
+            raise PIDConfigException("No key provided for value request.")
+        requestPath = f"https://{self.ip}:{self.port}/values/{target.replace(".","/")}/{target}/?prettyprint=1&key={self.key}"
+        response = requests.get(requestPath)
+        response.raise_for_status()
+        # Potentially do some type of processing here, depending on what users want. 
+        return response.json()
+
+    def set_value_request(self, device: str, target: str, value : float):
+        """
+        Set a given target value for a given target device. 
+        """
+        if self.key == None:
+            raise PIDConfigException("No key provided for value request.")
+        ## This is a two step process. First, we need to set the value and then we need to call the setter method. 
+        # This is the body for the setting request.
+        request_body = { "data" : { f"{device}.{target}" : { "content" : { "value" : value}}}}
+        requestPath = f"https://{self.ip}:{self.port}/values/?prettyprint=1&key={self.key}"
+        response = requests.post(requestPath, data=json.dumps(request_body), headers={'Content-Type': 'application/json'})
+        response.raise_for_status()
+
+    def apply_values_request(self, device : str):
+        """
+        This method applies all changed values for the target device to the device.
+        This is only necessary for some devices, such as the temperature controller,
+        where the control unit does not have direct access to the device, but needs 
+        to update configurations
+        """
+        if self.key == None:
+            raise PIDConfigException("No key provided for value request.")
+        # Now we need to call the setter method.        
+        request_body = { "data" : { f"{device}.write" : { "content" : { "call" : 1}}}}
+        requestPath = f"https://{self.ip}:{self.port}/values/?prettyprint=1&key={self.key}"
+        response = requests.post(requestPath, data=json.dumps(request_body), headers={'Content-Type': 'application/json'})
+        response.raise_for_status()
+
+    
+        
     def generic_request(self, path: str, payload: dict = None):
 
         if self.test_mode:
@@ -67,7 +111,6 @@ class BlueFTController:
             headers = {'Content-Type': 'application/json'}
             response = requests.post(path, data=json.dumps(payload), headers=headers)
         response.raise_for_status()
-
         return response.json()
 
     def make_time_str(self, dt: datetime, use_time_delta: bool = True):
