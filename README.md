@@ -20,6 +20,7 @@
       <ul>
         <li><a href="#installation">Installation</a></li>
         <li><a href="#basic-usage">Basic Usage</a></li>
+        <li><a href="#usage-in-matlab">Usage in Matlab</a></li>
       </ul>
     </li>
     <li><a href="#roadmap">Roadmap</a></li>
@@ -85,6 +86,16 @@ tcontrol.toggle_mxc_heater(status='off')
 temp = tcontrol.get_mxc_temperature()
 print(temp)
 
+```
+
+<!-- USAGE IN MATLAB -->
+
+### Usage in Matlab
+
+The controller can also be used from matlab:
+
+```matlab
+tcontrol = py.blueftc.BlueforsController(ip="YOUR_IP_HERE")
 ```
 
 <!-- ROADMAP -->
