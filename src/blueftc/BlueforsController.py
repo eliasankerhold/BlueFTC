@@ -190,11 +190,23 @@ class BlueFTController:
         newValue = "1" if newStatus else "0"
         return self.get_mxc_heater_value("active", newValue)
 
+    def toggle_mxc_heater(self, status: str) -> bool:
+        """
+        Get the status of the mixing chamber heater
+        """
+        if status == "on":
+            newValue = True
+        elif status == "off":
+            newValue = False
+        else:
+            raise PIDConfigException("Invalid status provided, must be 'on' or 'off'")
+        return self.get_mxc_heater_value(newValue)
+
     def get_mxc_heater_power(self) -> float:
         """
         Get the power of the mixing chamber heater in microwatts
         """
-        return float(self.get_mxc_heater_value("power")) * 1000.0
+        return float(self.get_mxc_heater_value("power")) * 1000000.0
 
     def set_mxc_heater_power(self, power: float) -> bool:
         """
