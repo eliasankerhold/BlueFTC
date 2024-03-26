@@ -1,8 +1,7 @@
 import requests
 import json
 import logging
-
-logger = logging.getLogger("bluefors")
+from logging.handlers import TimedRotatingFileHandler
 
 
 class PIDConfigException(Exception):
@@ -27,22 +26,6 @@ class APIError(Exception):
         super().__init__(message)
 
 
-def get_value_from_data_response(data: str):
-    """
-    This is a helper function to get the value from a data response.
-    """
-    if not data["data"]["content"]["latest_valid_value"]["status"] == "SYNCHRONIZED":
-        print("Warning: The obtained value is not synchronized!")
-    return data["data"]["content"]["latest_valid_value"]["value"]
-
-
-def get_synchronization_status(data: str):
-    """
-    This is a helper function to get the synchronization status from a data response.
-    """
-    return data["data"]["content"]["latest_valid_value"]["status"] == "SYNCHRONIZED"
-
-
 class BlueFTController:
     def __init__(
         self,
@@ -65,34 +48,67 @@ class BlueFTController:
         # Create a logger
         self.logger = logging.getLogger(__name__)
         log_level = logging.DEBUG if self.debug else logging.INFO
-        self.logger.setLevel(log_level)
 
         # Create a file handler and set level to debug
-        file_handler = logging.FileHandler("bluefors_controller.log")
+        file_handler = TimedRotatingFileHandler(
+            "bluefors.log", "midnight", 1, 0, "utf-8"
+        )
         file_handler.setLevel(log_level)
 
         # Create a formatter and set the format for log messages
-        formatter = logging.Formatter("%(asctime)s - %(funcName)s() - %(message)s")
+        formatter = logging.Formatter(
+            "%(asctime)s %(levelname)-6s - %(funcName)s() L%(lineno)-4d - %(message)s"
+        )
         file_handler.setFormatter(formatter)
         # Add the file handler to the logger
         self.logger.addHandler(file_handler)
+
+    def _get_value_from_data_response(self, data: str):
+        """
+        This is a helper function to get the value from a data response.
+        """
+        try:
+            if (
+                not data["data"]["content"]["latest_valid_value"]["status"]
+                == "SYNCHRONIZED"
+            ):
+                print("Warning: The obtained value is not synchronized!")
+            return data["data"]["content"]["latest_valid_value"]["value"]
+        except:
+            self.logger.warn(f"Could not verify synchronization status")
+            return False
+
+    def _get_synchronization_status(self, data: str):
+        """
+        This is a helper function to get the synchronization status from a data response.
+        """
+        try:
+            return (
+                data["data"]["content"]["latest_valid_value"]["status"]
+                == "SYNCHRONIZED"
+            )
+        except:
+            self.logger.warn(f"Could not verify synchronization status")
+            return False
 
     # general functions
     def _get_value_request(self, device: str, target: str):
         """
         Get the values currently in the Controller config for the given device
         """
-        logging.info()
         if self.key == None:
             raise PIDConfigException("No key provided for value request.")
         requestPath = f"https://{self.ip}:{self.port}/values/{device.replace('.','/')}/{target}/?prettyprint=1&key={self.key}"
         self.logger.debug(f"GET: {requestPath}")
-        response = requests.get(requestPath)
         # Let's see if the request was successful, if not, we return a NaN and logg an error
         try:
+            response = requests.get(requestPath)
             response.raise_for_status()
-        except requests.exceptions.HTTPError as err:
-
+        except (
+            requests.exceptions.BaseHTTPError,
+            requests.exceptions.HTTPError,
+            requests.exceptions.ConnectionError,
+        ) as err:
             self.logger.error(f"Error: {err}")
             # We return data, that indicates NaN and has an ERROR status (and is also otherwse not valid...)
             entry = {
@@ -103,6 +119,10 @@ class BlueFTController:
                 }
             }
             return entry
+        except Exception as e:
+            print(e)
+            print(type(e))
+            return None
         # Potentially do some type of processing here, depending on what users want.
         return response.json()
 
@@ -158,7 +178,7 @@ class BlueFTController:
         self.logger.info(f"Requesting value: {target_value}  from channel {channel}")
         data = self._get_value_request(device_id, target_value)
         try:
-            return get_value_from_data_response(data)
+            return self._get_value_from_data_response(data)
         except KeyError as e:
             raise APIError(data)
 
@@ -192,7 +212,7 @@ class BlueFTController:
         """
         data = self._get_value_request(self.mixing_chamber_heater, target)
         try:
-            return get_value_from_data_response(data)
+            return self._get_value_from_data_response(data)
         except KeyError as e:
             raise APIError(data)
 
@@ -202,7 +222,7 @@ class BlueFTController:
         """
         data = self._get_value_request(self.mixing_chamber_heater, target)
         try:
-            return get_synchronization_status(data)
+            return self._get_synchronization_status(data)
         except KeyError as e:
             raise APIError(data)
 
