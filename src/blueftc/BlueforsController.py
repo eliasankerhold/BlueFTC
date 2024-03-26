@@ -2,7 +2,7 @@ import requests
 import json
 import logging
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("bluefors")
 
 
 class PIDConfigException(Exception):
@@ -47,26 +47,62 @@ class BlueFTController:
     def __init__(
         self,
         ip: str,
-        mixing_chamber_channel_id: int,
+        mixing_chamber_channel_id: int = None,
+        read_only: bool = True,
         port: int = 49099,
         key: str = None,
+        debug: bool = False,
     ):
         self.ip = ip
         self.key = key
         self.port = port
         self.mixing_chamber_channel_id = mixing_chamber_channel_id
         self.mixing_chamber_heater = "mapper.heater_mappings_bftc.device.sample"
+        self.debug = debug
+        self._setup_logging()
+
+    def _setup_logging(self):
+        # Create a logger
+        self.logger = logging.getLogger(__name__)
+        log_level = logging.DEBUG if self.debug else logging.INFO
+        self.logger.setLevel(log_level)
+
+        # Create a file handler and set level to debug
+        file_handler = logging.FileHandler("bluefors_controller.log")
+        file_handler.setLevel(log_level)
+
+        # Create a formatter and set the format for log messages
+        formatter = logging.Formatter("%(asctime)s - %(funcName)s() - %(message)s")
+        file_handler.setFormatter(formatter)
+        # Add the file handler to the logger
+        self.logger.addHandler(file_handler)
 
     # general functions
     def _get_value_request(self, device: str, target: str):
         """
         Get the values currently in the Controller config for the given device
         """
+        logging.info()
         if self.key == None:
             raise PIDConfigException("No key provided for value request.")
         requestPath = f"https://{self.ip}:{self.port}/values/{device.replace('.','/')}/{target}/?prettyprint=1&key={self.key}"
+        self.logger.debug(f"GET: {requestPath}")
         response = requests.get(requestPath)
-        response.raise_for_status()
+        # Let's see if the request was successful, if not, we return a NaN and logg an error
+        try:
+            response.raise_for_status()
+        except requests.exceptions.HTTPError as err:
+
+            self.logger.error(f"Error: {err}")
+            # We return data, that indicates NaN and has an ERROR status (and is also otherwse not valid...)
+            entry = {
+                "data": {
+                    "content": {
+                        "latest_valid_value": {"value": float("nan"), "status": "ERROR"}
+                    }
+                }
+            }
+            return entry
         # Potentially do some type of processing here, depending on what users want.
         return response.json()
 
@@ -82,12 +118,14 @@ class BlueFTController:
         requestPath = (
             f"https://{self.ip}:{self.port}/values/?prettyprint=1&key={self.key}"
         )
+        self.logger.debug(f"POST: {requestPath} - Body: {request_body}")
         response = requests.post(
             requestPath,
             data=json.dumps(request_body),
             headers={"Content-Type": "application/json"},
         )
         response.raise_for_status()
+
         return response.json()
 
     def _apply_values_request(self, device: str):
@@ -104,6 +142,7 @@ class BlueFTController:
         requestPath = (
             f"https://{self.ip}:{self.port}/values/?prettyprint=1&key={self.key}"
         )
+        self.logger.debug(f"POST: {requestPath} - Body: {request_body}")
         response = requests.post(
             requestPath,
             data=json.dumps(request_body),
@@ -116,6 +155,7 @@ class BlueFTController:
         Get the specified data from a given channel
         """
         device_id = f"mapper.heater_mappings_bftc.device.c{channel}"
+        self.logger.info(f"Requesting value: {target_value}  from channel {channel}")
         data = self._get_value_request(device_id, target_value)
         try:
             return get_value_from_data_response(data)
@@ -170,12 +210,15 @@ class BlueFTController:
         """
         Set the value of the mixing chamber heater
         """
+        self.logger.info(f"Mixing Chamber Heater: Setting {target} to {value}")
         # Set the value
         self._set_value_request(self.mixing_chamber_heater, target, value)
         # Apply the value (otherwise it doesn't get synced to the temperature controller)
+        self.logger.info(f"Mixing Chamber Heater: Applying settings")
         self._apply_values_request(self.mixing_chamber_heater)
-
-        return self.check_heater_value_synced(target)
+        synced = self.check_heater_value_synced(target)
+        self.logger.info(f"Mixing Chamber Heater: Settings applied and synced")
+        return synced
 
     def get_mxc_heater_status(self) -> bool:
         """
@@ -188,11 +231,11 @@ class BlueFTController:
         Get the status of the mixing chamber heater
         """
         newValue = "1" if newStatus else "0"
-        return self.get_mxc_heater_value("active", newValue)
+        return self.set_mxc_heater_value("active", newValue)
 
     def toggle_mxc_heater(self, status: str) -> bool:
         """
-        Get the status of the mixing chamber heater
+        Toggle the heater switch
         """
         if status == "on":
             newValue = True
@@ -200,7 +243,7 @@ class BlueFTController:
             newValue = False
         else:
             raise PIDConfigException("Invalid status provided, must be 'on' or 'off'")
-        return self.get_mxc_heater_value(newValue)
+        return self.set_mxc_heater_value(newValue)
 
     def get_mxc_heater_power(self) -> float:
         """

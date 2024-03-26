@@ -106,6 +106,7 @@ tcontrol = py.blueftc.BlueforsController(ip="YOUR_IP_HERE")
 - [x] Update to latest version of Bluefors control software
 - [ ] Improve Error Handling
 - [ ] Upload to PyPi
+- [ ] Logging
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
