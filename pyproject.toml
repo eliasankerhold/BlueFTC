@@ -3,8 +3,8 @@ requires = ["setuptools", "setuptools-scm"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "bluetfc"
-version = "0.1.5"
+name = "blueftc"
+version = "0.2.1"
 authors = [
     {name = "Elias Ankerhold", email = "elias.ankerhold@aalto.fi"},
 ]
@@ -19,4 +19,5 @@ classifiers = [
 ]
 dependencies = [
     "requests",
+    "numpy",
 ]
