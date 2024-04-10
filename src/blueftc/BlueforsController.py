@@ -105,7 +105,7 @@ class BlueFTController:
         self,
         ip: str,
         mixing_chamber_channel_id: int,
-        port: int = 49099,
+        port: int = 49098,
         key: str = None,
         debug: bool = False,
     ):
@@ -187,7 +187,7 @@ class BlueFTController:
         try:
             if not self._get_synchronization_status(data, device=device, target=target):
                 print("Warning: The obtained value is not synchronized!")
-            return data["data"][f"{device}.{target}"]["latest_valid_value"]["value"]
+            return data["data"][f"{device}.{target}"]["content"]["latest_valid_value"]["value"]
         except:
             self.logger.warn(f"Could not verify synchronization status")
             return False
@@ -218,7 +218,7 @@ class BlueFTController:
         """
         try:
             return (
-                data["data"][f"{device}.{target}"]["latest_valid_value"]["status"]
+                data["data"][f"{device}.{target}"]["content"]["latest_valid_value"]["status"]
                 == "SYNCHRONIZED"
             )
         except:
