@@ -4,9 +4,10 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "blueftc"
-version = "0.2.1"
+version = "0.3.0"
 authors = [
     {name = "Elias Ankerhold", email = "elias.ankerhold@aalto.fi"},
+    {name = "Thomas Pfau", email = "elias.ankerhold@aalto.fi"},
 ]
 description = "Package to interact and control temperature controllers of BlueFors cryostats using HTTP GET and POST."
 readme = "README.md"
