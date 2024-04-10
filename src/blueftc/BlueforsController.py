@@ -185,14 +185,14 @@ class BlueFTController:
 
         """
         try:
-            if not self._get_synchronization_status(data):
+            if not self._get_synchronization_status(data, device=device, target=target):
                 print("Warning: The obtained value is not synchronized!")
             return data["data"][f"{device}.{target}"]["latest_valid_value"]["value"]
         except:
             self.logger.warn(f"Could not verify synchronization status")
             return False
 
-    def _get_synchronization_status(self, data: str):
+    def _get_synchronization_status(self, data: str, device: str, target: str):
         """
         Get the synchronization status from a data response.
 
@@ -200,6 +200,10 @@ class BlueFTController:
         ----------
         data : str
             The data response from which to extract the synchronization status.
+        device : str
+            The device identifier used in the data response.
+        target : str
+            The target identifier used in the data response.
 
         Returns
         -------
