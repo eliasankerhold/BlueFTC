@@ -356,6 +356,7 @@ class BlueFTController:
             requestPath,
             data=json.dumps(request_body),
             headers={"Content-Type": "application/json"},
+            verify=False
         )
         response.raise_for_status()
 
