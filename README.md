@@ -75,7 +75,8 @@ PORT_NUMBER = 12345
 MXC_ID = 6
 
 # create controller object
-controller = BlueFTController(ip=IP_ADDRESS, port=PORT_NUMBER, key=API_KEY, mixing_chamber_channel_id=MXC_ID)
+controller = BlueFTController(ip=IP_ADDRESS, port=PORT_NUMBER, key=API_KEY, 
+                              mixing_chamber_channel_id=MXC_ID)
 
 # read mixing chamber temperature in Kelvin
 mxc_temp = controller.get_mxc_temperature()
@@ -91,7 +92,7 @@ To improve security and avoid redundant variable definitions across multiple mea
 
 **A minimal working example of read commands can be found in the `examples` directory.**
 
-Create a file `credentials.py` with the API key and IP address:
+Create a file `credentials.py` with the required configuration:
 
 ```python
 API_KEY = '123456789abcdefghijklmnopqrstuvwxyz'
@@ -110,8 +111,9 @@ from credentials import API_KEY, IP_ADDRESS, PORT_NUMBER, MXC_ID
 
 # -------- OPTIONAL --------
 '''
-The requests package used to handle HTTP communication warns about an insecure connection if no HTTPS connection can 
-established. To prevent cluttering of console outputs and log files, it is advisable to disable the respective warning.
+The requests package used to handle HTTP communication warns about an insecure connection if 
+no HTTPS connection can established. To prevent cluttering of console outputs and log files, 
+it is advisable to disable the respective warning.
 '''
 import requests
 from requests.packages.urllib3.exceptions import InsecureRequestWarning
@@ -120,11 +122,13 @@ requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
 # --------------------------
 
 # create controller object
-controller = BlueFTController(ip=IP_ADDRESS, port=PORT_NUMBER, key=API_KEY, mixing_chamber_channel_id=MXC_ID)
+controller = BlueFTController(ip=IP_ADDRESS, port=PORT_NUMBER, key=API_KEY, 
+                              mixing_chamber_channel_id=MXC_ID)
 
 # -------- READ OPERATIONS --------
 '''
-The following commands only require an API key with read permissions and are always safe to execute.
+The following commands only require an API key with read permissions and are always safe 
+to execute.
 '''
 
 # read mixing chamber temperature, in Kelvin
@@ -152,8 +156,9 @@ mxc_setpoint = controller.get_mxc_heater_setpoint()
 
 # -------- WRITE OPERATIONS --------
 '''
-These commands require an API key with read and write permission and can potentially cause substantial damage to the 
-hardware. Only execute with caution and absolute certainty of what is going to happen!
+These commands require an API key with read and write permission and can potentially cause 
+substantial damage to the hardware. Only execute with caution and absolute certainty of 
+what is going to happen!
 
 All write commands return True if executed successfully, otherwise False.
 '''
