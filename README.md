@@ -203,7 +203,7 @@ Distributed under the GNU GPLv3 License. See `LICENSE.txt` for more information.
 
 ## Contact
 
-Elias Ankerhold - elias.ankerhold[at].aalto.fi
+Elias Ankerhold - elias.ankerhold[at].aalto.fi <br>
 Thomas Pfau - thomas.pfau[at].aalto.fi
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
