@@ -33,7 +33,9 @@
 
 The control software for Bluefors cryostat and their temperature controller does not come with a native Python interface. At the same time, Python is widely used as a measurement scripting language among users of Bluefors devices. This driver uses HTTP GET/POST commands within a local network to remotely read and write to a temperature controller using the Bluefors control software's API.
 
-<span style="background-color:rgba(243, 128, 151, 0.89)">If multiple instances of the temperature controller are running in parallel on the same Windows system (such as, for example if multiple measurement scripts or Jupyter notebookes are running at the same time), there might be warnings when the log file is changed every Sunday. These warnings will not crash the script, but cannot be avoided if multiple instances are used in parallel.</span>
+[!IMPORTANT]
+If multiple instances of the temperature controller are running in parallel on the same Windows system (such as, for example if multiple measurement scripts or Jupyter notebookes are running at the same time), there might be warnings when the log file is changed every Sunday. These warnings will not crash the script, but cannot be avoided if multiple instances are used in parallel.
+
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
