@@ -149,7 +149,7 @@ class BlueFTController:
 
         # Create a file handler and set level to debug
         file_handler = TimedRotatingFileHandler(
-            "bluefors.log", "midnight", 1, 0, "utf-8"
+            "bluefors.log", when="W6", interval=None, backupCount=12, encoding="utf-8"
         )
         file_handler.setLevel(log_level)
 
