@@ -61,7 +61,7 @@ Make sure the package is installed in the current Python environment!
 
 ```python
 # import
-from blueftc.BlueFTController import BlueforsController
+from blueftc.BlueforsController import BlueFTController
 
 import requests
 from requests.packages.urllib3.exceptions import InsecureRequestWarning
