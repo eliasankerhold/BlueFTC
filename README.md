@@ -86,7 +86,7 @@ mxc_temp = controller.get_mxc_temperature()
 
 ### Full Usage
 
-Once installed, the package can be easily integrated into measurement scripts. To initiate a connection to the control software running on the host machine, it is required to provide its IP address, port number and an API key equipped with the required permissions. For convenience, the ID of the mixing chamber thermometer  used by the control software should be defined as well.
+Once installed, the package can be easily integrated into measurement scripts. To initiate a connection to the control software running on the host machine, it is required to provide its IP address, port number and an API key equipped with the required permissions. For convenience, the ID of the mixing chamber thermometer used by the control software should be defined as well. If there is no mixing chamber, the respective paramter can be omitted, which will disable all mxc related functions. Operation of other thermometer channels is still possible by directly supplying the respective channel number to the general function (e.g. ``get_channel_temperature``).
 
 To improve security and avoid redundant variable definitions across multiple measurement scripts, is strongly advised to store the IP address, port number and API key in a separate file and import them at the beginning of the measurement program. The ID of the mixing chamber thermometer shall be treated equally.
 
@@ -106,7 +106,7 @@ After importing the IP and API key, an instance of the BlueforsController class 
 
 ```python
 # import
-from blueftc.BlueFTController import BlueforsController
+from blueftc.BlueforsController import BlueFTController
 from credentials import API_KEY, IP_ADDRESS, PORT_NUMBER, MXC_ID
 
 # -------- OPTIONAL --------
