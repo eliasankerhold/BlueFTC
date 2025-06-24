@@ -15,7 +15,7 @@ class APIError(Exception):
         # Lets see, if it works for you.
         if "details" in jsonData["error"]:
             # This assumes we got an details array.
-            details = jsonData["error"][details]
+            details = jsonData["error"]["details"]
         else:
             details = [jsonData["error"]]
         errors = []
@@ -149,7 +149,7 @@ class BlueFTController:
 
         # Create a file handler and set level to debug
         file_handler = TimedRotatingFileHandler(
-            "bluefors.log", when="W6", interval=None, backupCount=12, encoding="utf-8"
+            "bluefors.log", when="W6", interval=1, backupCount=12, encoding="utf-8"
         )
         file_handler.setLevel(log_level)
 
@@ -442,9 +442,9 @@ class BlueFTController:
             The resistance of the given channel.
 
         """
-        if self._has_mxc:       
+        if self._has_mxc:
             return self.get_channel_temperature(self.mixing_chamber_channel_id)
-        
+
         else:
             raise Exception('Mixing chamber channel ID not configured.')
 
@@ -458,9 +458,9 @@ class BlueFTController:
             The resistance of the mixing chamber sensor.
 
         """
-        if self._has_mxc:       
+        if self._has_mxc:
             return self.get_channel_resistance(self.mixing_chamber_channel_id)
-        
+
         else:
             raise Exception('Mixing chamber channel ID not configured.')
 
@@ -485,7 +485,7 @@ class BlueFTController:
 
         """
         if self._has_mxc:
-        
+
             data = self._get_value_request(self.mixing_chamber_heater, target)
             try:
                 return self._get_value_from_data_response(
@@ -493,7 +493,7 @@ class BlueFTController:
                 )
             except KeyError as e:
                 raise APIError(data)
-            
+
         else:
             raise Exception('Mixing chamber channel ID not configured.')
 
@@ -545,7 +545,7 @@ class BlueFTController:
             synced = self.check_heater_value_synced(target)
             self.logger.info(f"Mixing Chamber Heater: Settings applied and synced")
             return synced
-        
+
         else:
             raise Exception('Mixing chamber channel ID not configured.')
 
@@ -561,13 +561,13 @@ class BlueFTController:
         """
         if self._has_mxc:
             return self.get_mxc_heater_value("active") == "1"
-        
+
         else:
             raise Exception('Mixing chamber channel ID not configured.')
 
     def set_mxc_heater_status(self, newStatus: bool) -> bool:
         """
-        Get the status of the mixing chamber heater
+        Set the status of the mixing chamber heater
 
         Parameters
         ----------
@@ -583,7 +583,7 @@ class BlueFTController:
         if self._has_mxc:
             newValue = "1" if newStatus else "0"
             return self.set_mxc_heater_value("active", newValue)
-        
+
         else:
             raise Exception('Mixing chamber channel ID not configured.')
 
@@ -614,8 +614,8 @@ class BlueFTController:
                 newValue = False
             else:
                 raise PIDConfigException("Invalid status provided, must be 'on' or 'off'")
-            return self.set_mxc_heater_value(newValue)
-        
+            return self.set_mxc_heater_status(newValue)
+
         else:
             raise Exception('Mixing chamber channel ID not configured.')
 
@@ -631,7 +631,7 @@ class BlueFTController:
         """
         if self._has_mxc:
             return float(self.get_mxc_heater_value("power")) * 1000000.0
-        
+
         else:
             raise Exception('Mixing chamber channel ID not configured.')
 
@@ -658,7 +658,7 @@ class BlueFTController:
                     "Power should be in the range of 0 to 1000 microwatts"
                 )
             return self.set_mxc_heater_value("power", power / 1000000.0)
-        
+
         else:
             raise Exception('Mixing chamber channel ID not configured.')
 
@@ -674,7 +674,7 @@ class BlueFTController:
         """
         if self._has_mxc:
             return float(self.get_mxc_heater_value("setpoint"))
-        
+
         else:
             raise Exception('Mixing chamber channel ID not configured.')
 
@@ -696,7 +696,7 @@ class BlueFTController:
         """
         if self._has_mxc:
             return self.set_mxc_heater_value("setpoint", temperature / 1000.0)
-        
+
         else:
             raise Exception('Mixing chamber channel ID not configured.')
 
@@ -711,7 +711,7 @@ class BlueFTController:
         """
         if self._has_mxc:
             return self.get_mxc_heater_value("pid_mode") == "1"
-        
+
         else:
             raise Exception('Mixing chamber channel ID not configured.')
 
@@ -733,6 +733,6 @@ class BlueFTController:
         if self._has_mxc:
             newValue = "1" if toggle else "0"
             return self.set_mxc_heater_value("pid_mode", newValue)
-        
+
         else:
             raise Exception('Mixing chamber channel ID not configured.')
