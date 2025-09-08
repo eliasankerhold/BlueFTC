@@ -77,10 +77,11 @@ API_KEY = '123456789abcdefghijklmnopqrstuvwxyz'
 IP_ADDRESS = '123.456.789.0'
 PORT_NUMBER = 12345
 MXC_ID = 6
+HEATER_ID = 4
 
 # create controller object
 controller = BlueFTController(ip=IP_ADDRESS, port=PORT_NUMBER, key=API_KEY, 
-                              mixing_chamber_channel_id=MXC_ID)
+                              mixing_chamber_channel_id=MXC_ID, mixing_chamber_heater_id=HEATER_ID)
 
 # read mixing chamber temperature in Kelvin
 mxc_temp = controller.get_mxc_temperature()
@@ -103,6 +104,7 @@ API_KEY = '123456789abcdefghijklmnopqrstuvwxyz'
 IP_ADDRESS = '123.456.789.0'
 PORT_NUMBER = 12345
 MXC_ID = 6
+HEATER_ID = 4
 
 ```
 
@@ -111,7 +113,7 @@ After importing the IP and API key, an instance of the BlueforsController class 
 ```python
 # import
 from blueftc.BlueforsController import BlueFTController
-from credentials import API_KEY, IP_ADDRESS, PORT_NUMBER, MXC_ID
+from credentials import API_KEY, IP_ADDRESS, PORT_NUMBER, MXC_ID, HEATER_ID
 
 # -------- OPTIONAL --------
 '''
@@ -127,7 +129,7 @@ requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
 
 # create controller object
 controller = BlueFTController(ip=IP_ADDRESS, port=PORT_NUMBER, key=API_KEY, 
-                              mixing_chamber_channel_id=MXC_ID)
+                              mixing_chamber_channel_id=MXC_ID, mixing_chamber_heater_id=HEATER_ID)
 
 # -------- READ OPERATIONS --------
 '''
