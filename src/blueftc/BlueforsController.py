@@ -55,7 +55,9 @@ class BlueFTController:
     -------
     _setup_logging():
         Sets up the logger for this class.
-    _get_synchronization_status(data: str) -> bool:
+    _handle_status_response(status: str, target: str, set: bool) -> int:
+        Handles possible status values returned from control software.
+    _get_synchronization_status(data: str) -> str:
         Gets the synchronization status from a data response.
     _get_value_request(device: str, target: str) -> requests.Response:
         Gets the values currently in the Controller config for the given device.
@@ -105,6 +107,7 @@ class BlueFTController:
         self,
         ip: str,
         mixing_chamber_channel_id: int = None,
+        mixing_chamber_heater_id: int = None,
         port: int = 49098,
         key: str = None,
         debug: bool = False,
@@ -117,7 +120,9 @@ class BlueFTController:
             ip : str
                 The IP address of the BlueFors Temperature Controller.
             mixing_chamber_channel_id : int
-                The channel ID of the mixing chamber (defualt is None).
+                The channel ID of the mixing chamber (default is None).
+            mixing_chamber_heater_id : int
+                The heater ID of the mixing chamber heater (default is None).
             port : int, optional
                 The port used for the requests (default is 49099).
             key : str, optional
@@ -129,7 +134,7 @@ class BlueFTController:
         self.key = key
         self.port = port
         self.mixing_chamber_channel_id = mixing_chamber_channel_id
-        self.mixing_chamber_heater = "mapper.heater_mappings_bftc.device.sample"
+        self.mixing_chamber_heater = f"driver.bftc.data.heaters.heater_{mixing_chamber_heater_id}"
         self.debug = debug
         self._setup_logging()
         self._has_mxc = True if mixing_chamber_channel_id is not None else False
@@ -161,6 +166,52 @@ class BlueFTController:
         # Add the file handler to the logger
         self.logger.addHandler(file_handler)
 
+    @staticmethod
+    def _handle_status_response(status: str, target: str, set: bool = False) -> int:
+        """
+        This is a helper function to handle all possible status values returned by the control software.
+        
+        Parameters
+        ----------
+        status : str
+            The status value received from the control software.
+        target : str
+            The target name on which the operation was performed.
+        set : bool
+            Toggle whether the status was received during a get or set operation.
+        
+        Returns
+        --------
+        value : int
+            Code depending on parsed status value. 'INVALID' and 'DISCONNECTED' return 0. 'CHANGED', SYNCHRONIZED' and 'INDEPENDENT' return 1. 'QUEUED' returns 2. If type casted to bool, all acceptable status values cast to True, others to False.
+        """
+        info = f" raised while setting '{target}'" if set else ''
+        
+        if status == 'INVALID':
+            print(f"Warning{info}: The target value '{target}' is invalid!")
+            return 0
+                
+        elif status == 'CHANGED':
+            return 1
+                
+        elif status == 'DISCONNECTED':
+            print(f"Warning{info}: The target device is disconnected! The target value '{target}' is not valid.")
+            return 0
+                
+        elif status == 'QUEUED':
+            print(f"Warning{info}: The target value '{target}' has been marked as 'QUEUED' and might not be synchronized between control software and physical device! Verify again.")
+            return 2
+        
+        elif status == 'SYNCHRONIZED':
+            return 1
+        
+        elif status == 'INDEPENDENT':
+            return 1    
+        
+        else:
+            print(f"Warning{info}: Received invalid status response from control software. '{status}' is not a valid status.")
+            return 0
+
     def _get_value_from_data_response(self, data: str, device: str, target: str):
         """
         This is a helper function to get the value from a data response.
@@ -186,8 +237,8 @@ class BlueFTController:
 
         """
         try:
-            if not self._get_synchronization_status(data, device=device, target=target):
-                print("Warning: The obtained value is not synchronized!")
+            self._handle_status_response(status=self._get_synchronization_status(data, device=device, target=target), target=target)
+
             return data["data"][f"{device}.{target}"]["content"]["latest_valid_value"]["value"]
         except:
             self.logger.warn(f"Could not verify synchronization status")
@@ -218,13 +269,11 @@ class BlueFTController:
 
         """
         try:
-            return (
-                data["data"][f"{device}.{target}"]["content"]["latest_valid_value"]["status"]
-                == "SYNCHRONIZED"
-            )
+            return data["data"][f"{device}.{target}"]["content"]["latest_valid_value"]["status"]
+            
         except:
             self.logger.warn(f"Could not verify synchronization status")
-            return False
+            return 'INVALID'
 
     # general functions
     def _get_value_request(self, device: str, target: str):
@@ -509,9 +558,8 @@ class BlueFTController:
         """
         data = self._get_value_request(self.mixing_chamber_heater, target)
         try:
-            return self._get_synchronization_status(
-                data, device=self.mixing_chamber_heater, target=target
-            )
+            return bool(self._handle_status_response(self._get_synchronization_status(data, device=self.mixing_chamber_heater, target=target), target=target, set=True))
+        
         except KeyError as e:
             raise APIError(data)
 
@@ -685,7 +733,7 @@ class BlueFTController:
 
         Parameters
         ----------
-        setpoint : float
+        temperature : float
             The setpoint to set for the heater.
 
         Returns
@@ -721,7 +769,7 @@ class BlueFTController:
 
         Parameters
         ----------
-        setpoint : bool
+        toggle : bool
             The mode to set for the heater.
 
         Returns
@@ -736,3 +784,44 @@ class BlueFTController:
 
         else:
             raise Exception('Mixing chamber channel ID not configured.')
+
+    def get_mxc_heater_pid_config(self) -> list:
+        """
+        Get the pid parameters of the mixing chamber heater.
+
+        Returns
+        -------
+        list
+            the pid parameters of the mixing chamber heater in the order [P, I, D]
+        """
+        pid = []
+        for j in ['p', 'i', 'd']:
+            pid.append(float(self.get_mxc_heater_value(f'pid_{j}')))
+            
+        return pid
+    
+    
+    def set_mxc_heater_pid_config(self, p: float = None, i: float = None, d: float = None) -> bool:
+        """
+        Set the pid parameters of the mixing chamber heater.
+
+        Parameters
+        ----------
+        p : float
+            Proportional parameter of PID control.
+        i : float
+            Integral parameter of PID control.
+        d : float
+            Derivative parameter of PID control.
+
+        Returns
+        -------
+        bool
+            True if the PID parameters were set successfully, False otherwise.
+        """
+        for j, k in zip([p, i, d], ['p', 'i', 'd']):
+            if j is not None:
+                if not self.set_mxc_heater_value(f'pid_{k}', j):
+                    return False
+                
+        return True
