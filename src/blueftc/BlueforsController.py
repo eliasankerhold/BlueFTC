@@ -2,6 +2,9 @@ import requests
 import json
 import logging
 from logging.handlers import TimedRotatingFileHandler
+import numpy as np
+from warnings import warn
+import sys
 
 
 class PIDConfigException(Exception):
@@ -50,11 +53,15 @@ class BlueFTController:
         A flag used to set the log level.
     logger : logging.Logger
         The logger used to log messages.
+    pid_config_path : str
+        Path to file storing PID calibration table.
 
     Methods
     -------
     _setup_logging():
         Sets up the logger for this class.
+     _load_pid_config():
+        Loads PID calibration from csv file.
     _handle_status_response(status: str, target: str, set: bool) -> int:
         Handles possible status values returned from control software.
     _get_synchronization_status(data: str) -> str:
@@ -111,6 +118,7 @@ class BlueFTController:
         port: int = 49098,
         key: str = None,
         debug: bool = False,
+        pid_calib_path: str = None
     ):
         """
         Constructs all the necessary attributes for the BlueFTController object.
@@ -129,6 +137,8 @@ class BlueFTController:
                 The key used for the requests (default is None).
             debug : bool, optional
                 A flag used to set the log level (default is False).
+            pid_config_path : str, optional
+                Filepath to csv file storing PID calibration table (default is None).
         """
         self.ip = ip
         self.key = key
@@ -136,8 +146,14 @@ class BlueFTController:
         self.mixing_chamber_channel_id = mixing_chamber_channel_id
         self.mixing_chamber_heater = f"driver.bftc.data.heaters.heater_{mixing_chamber_heater_id}"
         self.debug = debug
+        self.pid_config_path = pid_calib_path
         self._setup_logging()
         self._has_mxc = True if mixing_chamber_channel_id is not None else False
+        self._valid_pid_config = False
+        self._pid_calib_setpoints = None
+        self._pid_calib_pid = None
+
+        self._load_pid_config()
 
     def _setup_logging(self):
         """
@@ -159,12 +175,44 @@ class BlueFTController:
         file_handler.setLevel(log_level)
 
         # Create a formatter and set the format for log messages
-        formatter = logging.Formatter(
+        file_formatter = logging.Formatter(
             "%(asctime)s %(levelname)-6s - %(funcName)s() L%(lineno)-4d - %(message)s"
         )
-        file_handler.setFormatter(formatter)
+        file_handler.setFormatter(file_formatter)
         # Add the file handler to the logger
         self.logger.addHandler(file_handler)
+
+        # Add a stream handler to log to console
+        console_formatter = logging.Formatter(
+            "%(asctime)s :-- %(levelname)s --: %(message)s"
+        )
+        console_handler = logging.StreamHandler()
+        console_handler.setFormatter(console_formatter)
+        console_handler.setLevel(logging.INFO)
+        self.logger.addHandler(console_handler)
+
+        self.logger.setLevel(log_level)
+
+    def _load_pid_config(self):
+        """
+        Loads a PID calibration table from a csv file. Must be formatted with three columns: [setpoint, p, i, d] and one header row.
+        """
+
+        if self.pid_config_path is not None:
+            try:
+                pid_config = np.loadtxt(self.pid_config_path, dtype='float', delimiter=',', skiprows=1)
+                self._pid_calib_setpoints = pid_config[:, 0]
+                self._pid_calib_pid = pid_config[:, 1:]
+                sortind = np.argsort(self._pid_calib_setpoints)
+                self._pid_calib_setpoints = self._pid_calib_setpoints[sortind]
+                self._pid_calib_pid = self._pid_calib_pid[sortind]
+                self._valid_pid_config = True
+
+                self.logger.info(f'PID calibration loaded from {self.pid_config_path}')
+
+            except FileNotFoundError as ex:
+                warn(f'Encountered error while loading pid config file: {ex}\nContinuing without automatic PID setpoint parameter adjustment.')
+
 
     @staticmethod
     def _handle_status_response(status: str, target: str, set: bool = False) -> int:
@@ -726,15 +774,18 @@ class BlueFTController:
         else:
             raise Exception('Mixing chamber channel ID not configured.')
 
-    def set_mxc_heater_setpoint(self, temperature: float) -> bool:
+    def set_mxc_heater_setpoint(self, temperature: float, use_pid_calib: bool = True) -> bool:
         """
-        Set the setpoint of the mixing chamber heater in milli Kelvin
-        temperature: float
+        Set the setpoint of the mixing chamber heater in milli Kelvin. If a calibration table is given in the constructor and use_pid_calib 
+        is true, the PID calibration closest to the desired setpoint will be applied before setting the setpoint.
 
         Parameters
         ----------
         temperature : float
             The setpoint to set for the heater.
+
+        use_pid_calib : bool, optional
+            Flag to toggle using the PID calibration table (default is True).
 
         Returns
         -------
@@ -743,6 +794,14 @@ class BlueFTController:
 
         """
         if self._has_mxc:
+            if use_pid_calib and self._valid_pid_config:
+                closest = np.argmin(np.abs(self._pid_calib_setpoints - temperature))
+                self.logger.info(f'Using PID calibration for setpoint {self._pid_calib_setpoints[closest]} mK, closest available calibration to {temperature} mK.')
+                self.set_mxc_heater_pid_config(*self._pid_calib_pid[closest])
+
+            else:
+                warn('PID calibration not used, using current PID parameters stored on the device.')
+
             return self.set_mxc_heater_value("setpoint", temperature / 1000.0)
 
         else:

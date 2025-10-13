@@ -185,6 +185,16 @@ status = controller.set_mxc_heater_mode(True)
 
 ```
 
+#### Using a PID calibration table
+When varying the cryostat temperature over a wider range using the PID control, the PID parameter configuration itself will most likely have to be changed depending on the temperature setpoint. After an initial manual calibration to find suitable parameters, it is possible to automatically make this adjustment by providing a PID calibration table (as given in the examples) to the BlueFTController class. 
+```
+controller = BlueFTController(ip=IP_ADDRESS, port=PORT_NUMBER, key=API_KEY, 
+                              mixing_chamber_channel_id=MXC_ID, mixing_chamber_heater_id=HEATER_ID,
+                              pid_config_path='path/to/my/calibration_table.csv')
+```
+The calibration table has to consist one header row and four columns, storing the setpoint itself in milli Kelvin and the P, I, D parameters that have manually been found to work at the respective temperature. If such table is given, the ``set_mxc_heater_setpoint(my_setpoint)`` function will first find the pid parameters from the calibation table that are the closest to the desired temperature ``my_setpoint``, apply them to the device and only after that, changes the setpoint of the PID control. This behavior can be suppressed even if a calibration table is given by passing ``use_pid_calib=False``.
+
+
 <!-- ROADMAP -->
 
 ## Roadmap
