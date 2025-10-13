@@ -912,9 +912,9 @@ class BlueFTController:
         if self._maxigauge_pressure:
             data = self._get_value_request(device='driver.maxigauge.pressures', target=f'p{channel}')
             try:
-                return self._get_value_from_data_response(
+                return float(self._get_value_from_data_response(
                     data, device='driver.maxigauge.pressures', target=f'p{channel}'
-                )
+                ))
             except KeyError as e:
                 raise APIError(data)
         
