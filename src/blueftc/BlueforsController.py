@@ -55,6 +55,8 @@ class BlueFTController:
         The logger used to log messages.
     pid_config_path : str
         Path to file storing PID calibration table.
+    activate_maxigauge_reading : bool, optional
+        Toggles activation of pressure reading for Pfeiffer Maxigauge units (default is False).
 
     Methods
     -------
@@ -108,6 +110,8 @@ class BlueFTController:
         Gets the pid mode of the mixing chamber heater.
     set_mxc_heater_mode(toggle: bool) -> bool:
         Sets the pid mode of the mixing chamber heater.
+    get_maxigauge_channel(channel: int) -> float:
+        Reads the pressure gauge of the respective channel in a Pfeiffer Maxigauge unit.
     """
 
     def __init__(
@@ -118,7 +122,8 @@ class BlueFTController:
         port: int = 49098,
         key: str = None,
         debug: bool = False,
-        pid_calib_path: str = None
+        pid_calib_path: str = None,
+        activate_maxigauge_reading: bool = False
     ):
         """
         Constructs all the necessary attributes for the BlueFTController object.
@@ -139,6 +144,8 @@ class BlueFTController:
                 A flag used to set the log level (default is False).
             pid_config_path : str, optional
                 Filepath to csv file storing PID calibration table (default is None).
+            activate_maxigauge_reading : bool, optional
+                Toggles activation of pressure reading for Pfeiffer Maxigauge units (default is False).
         """
         self.ip = ip
         self.key = key
@@ -152,6 +159,7 @@ class BlueFTController:
         self._valid_pid_config = False
         self._pid_calib_setpoints = None
         self._pid_calib_pid = None
+        self._maxigauge_pressure = activate_maxigauge_reading
 
         self._load_pid_config()
 
@@ -884,3 +892,25 @@ class BlueFTController:
                     return False
                 
         return True
+    
+
+    # pressure gauges
+    def get_maxigauge_channel(self, channel: int) -> float:
+        """
+        Reads the pressure value of a Pfeiffer Maxigauge unit.
+        
+        Parameters
+        ----------
+        channel : int
+            Channel of the desired gauge.
+
+        Returns
+        -------
+        float
+            Pressure of the requested gauge, in mbar.
+        """
+        if self._maxigauge_pressure:
+            return self._get_value_request(device='driver.maxigauge.pressures', target=f'p{channel}')
+        
+        else:
+            raise Exception('Activate maxigauge reading toggle to read pressure values.')

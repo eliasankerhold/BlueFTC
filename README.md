@@ -194,6 +194,9 @@ controller = BlueFTController(ip=IP_ADDRESS, port=PORT_NUMBER, key=API_KEY,
 ```
 The calibration table has to consist of one header row and four columns, storing the setpoint itself in milli Kelvin and the P, I, D parameters that have manually been found to work at the respective temperature. If such table is given, the ``set_mxc_heater_setpoint(temperature=my_setpoint)`` function will first find the pid parameters from the calibation table that are the closest to the desired temperature ``my_setpoint``, apply them to the device and only after that, change the setpoint of the PID control. This behavior can be suppressed even if a calibration table is given by passing ``set_mxc_heater_setpoint(temperature=my_setpoint, use_pid_calib=False)``.
 
+#### Reading Pressure Gauges
+Even though not directly related to the temperature controller, reading pressure gauges is an integral part of monitoring the operation of the cryostat. For Pfeiffer Vacuum Maxigauge units, passing ``activate_maxigauge_reading=True`` when creating a ``BlueFTController`` object enables the use of the function ``get_maxigauge_channel(channel: int)``, which allows to query the respective pressure in mBar.
+
 
 <!-- ROADMAP -->
 
