@@ -910,7 +910,13 @@ class BlueFTController:
             Pressure of the requested gauge, in mbar.
         """
         if self._maxigauge_pressure:
-            return self._get_value_request(device='driver.maxigauge.pressures', target=f'p{channel}')
+            data = self._get_value_request(device='driver.maxigauge.pressures', target=f'p{channel}')
+            try:
+                return self._get_value_from_data_response(
+                    data, device='driver.maxigauge.pressures', target=f'p{channel}'
+                )
+            except KeyError as e:
+                raise APIError(data)
         
         else:
             raise Exception('Activate maxigauge reading toggle to read pressure values.')
