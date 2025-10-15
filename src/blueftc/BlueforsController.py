@@ -4,7 +4,7 @@ import logging
 from logging.handlers import TimedRotatingFileHandler
 import numpy as np
 from warnings import warn
-import sys
+from random import randint
 
 
 class PIDConfigException(Exception):
@@ -55,8 +55,10 @@ class BlueFTController:
         The logger used to log messages.
     pid_config_path : str
         Path to file storing PID calibration table.
-    activate_maxigauge_reading : bool, optional
+    activate_maxigauge_reading : bool
         Toggles activation of pressure reading for Pfeiffer Maxigauge units (default is False).
+    emulate : bool
+        Toggles emulation mode, where no actual communication with the control software is taking place.
 
     Methods
     -------
@@ -123,7 +125,8 @@ class BlueFTController:
         key: str = None,
         debug: bool = False,
         pid_calib_path: str = None,
-        activate_maxigauge_reading: bool = False
+        activate_maxigauge_reading: bool = False,
+        emulate: bool = False
     ):
         """
         Constructs all the necessary attributes for the BlueFTController object.
@@ -146,6 +149,8 @@ class BlueFTController:
                 Filepath to csv file storing PID calibration table (default is None).
             activate_maxigauge_reading : bool, optional
                 Toggles activation of pressure reading for Pfeiffer Maxigauge units (default is False).
+            emulate : bool, optional
+                Toggles emulation mode, where no actual communication with the control software is taking place.
         """
         self.ip = ip
         self.key = key
@@ -160,6 +165,7 @@ class BlueFTController:
         self._pid_calib_setpoints = None
         self._pid_calib_pid = None
         self._maxigauge_pressure = activate_maxigauge_reading
+        self._emulate = emulate
 
         self._load_pid_config()
 
@@ -196,7 +202,7 @@ class BlueFTController:
         )
         console_handler = logging.StreamHandler()
         console_handler.setFormatter(console_formatter)
-        console_handler.setLevel(logging.INFO)
+        console_handler.setLevel(log_level)
         self.logger.addHandler(console_handler)
 
         self.logger.setLevel(log_level)
@@ -357,34 +363,53 @@ class BlueFTController:
         if self.key == None:
             raise PIDConfigException("No key provided for value request.")
         requestPath = f"https://{self.ip}:{self.port}/values/{device.replace('.','/')}/{target}/?prettyprint=1&key={self.key}"
-        self.logger.debug(f"GET: {requestPath}")
-        # Let's see if the request was successful, if not, we return a NaN and logg an error
-        try:
-            response = requests.get(
-                requestPath, verify=False
-            )  # The server has a self-signed certificate
-            response.raise_for_status()
-        except (
-            requests.exceptions.BaseHTTPError,
-            requests.exceptions.HTTPError,
-            requests.exceptions.ConnectionError,
-        ) as err:
-            self.logger.error(f"Error: {err}")
-            # We return data, that indicates NaN and has an ERROR status (and is also otherwse not valid...)
-            entry = {
-                "data": {
-                    "content": {
-                        "latest_valid_value": {"value": float("nan"), "status": "ERROR"}
+
+        if not self._emulate:
+            self.logger.debug(f"GET: {requestPath}")
+            # Let's see if the request was successful, if not, we return a NaN and logg an error
+            try:
+                response = requests.get(
+                    requestPath, verify=False
+                )  # The server has a self-signed certificate
+                response.raise_for_status()
+            except (
+                requests.exceptions.BaseHTTPError,
+                requests.exceptions.HTTPError,
+                requests.exceptions.ConnectionError,
+            ) as err:
+                self.logger.error(f"Error: {err}")
+                # We return data, that indicates NaN and has an ERROR status (and is also otherwse not valid...)
+                entry = {
+                    "data": {
+                        "content": {
+                            "latest_valid_value": {"value": float("nan"), "status": "ERROR"}
+                        }
                     }
                 }
-            }
-            return entry
-        except Exception as e:
-            print(e)
-            print(type(e))
-            return None
-        # Potentially do some type of processing here, depending on what users want.
-        return response.json()
+                return entry
+            except Exception as e:
+                print(e)
+                print(type(e))
+                return None
+            # Potentially do some type of processing here, depending on what users want.
+            return response.json()
+        
+        else:
+            self.logger.debug(f"EMULATED, GET: {requestPath}")
+            mock_response = {'data':
+                             {
+                                 'content':
+                                 {
+                                     'latest_valid_value':
+                                     {
+                                         'value': randint(0, 100),
+                                         'status': 'SYNCHRONIZED'
+                                     }
+                                 }
+                             }
+                             }
+            
+            return mock_response
 
     def _set_value_request(self, device: str, target: str, value: float):
         """
@@ -415,22 +440,29 @@ class BlueFTController:
         """
         if self.key == None:
             raise PIDConfigException("No key provided for value request.")
+        
         ## This is a two step process. First, we need to set the value and then we need to call the setter method.
         # This is the body for the setting request.
         request_body = {"data": {f"{device}.{target}": {"content": {"value": value}}}}
         requestPath = (
             f"https://{self.ip}:{self.port}/values/?prettyprint=1&key={self.key}"
         )
-        self.logger.debug(f"POST: {requestPath} - Body: {request_body}")
-        response = requests.post(
-            requestPath,
-            data=json.dumps(request_body),
-            headers={"Content-Type": "application/json"},
-            verify=False,  # Again, self-signed certificate of the server
-        )
-        response.raise_for_status()
 
-        return response.json()
+        if not self._emulate:
+            self.logger.debug(f"POST: {requestPath} - Body: {request_body}")
+            response = requests.post(
+                requestPath,
+                data=json.dumps(request_body),
+                headers={"Content-Type": "application/json"},
+                verify=False,  # Again, self-signed certificate of the server
+            )
+            response.raise_for_status()
+
+            return response.json()
+        
+        else:
+            self.logger.debug(f"EMULATE, POST: {requestPath} - Body: {request_body}")
+
 
     def _apply_values_request(self, device: str):
         """
@@ -457,14 +489,19 @@ class BlueFTController:
         requestPath = (
             f"https://{self.ip}:{self.port}/values/?prettyprint=1&key={self.key}"
         )
-        self.logger.debug(f"POST: {requestPath} - Body: {request_body}")
-        response = requests.post(
-            requestPath,
-            data=json.dumps(request_body),
-            headers={"Content-Type": "application/json"},
-            verify=False
-        )
-        response.raise_for_status()
+
+        if not self._emulate:
+            self.logger.debug(f"POST: {requestPath} - Body: {request_body}")
+            response = requests.post(
+                requestPath,
+                data=json.dumps(request_body),
+                headers={"Content-Type": "application/json"},
+                verify=False
+            )
+            response.raise_for_status()
+
+        else:
+            self.logger.debug(f"EMULATE, POST: {requestPath} - Body: {request_body}")
 
     def get_channel_data(self, channel: int, target_value: str):
         """
