@@ -396,17 +396,16 @@ class BlueFTController:
         
         else:
             self.logger.debug(f"EMULATED, GET: {requestPath}")
-            mock_response = {'data':
-                             {
-                                 'content':
-                                 {
-                                     'latest_valid_value':
-                                     {
-                                         'value': randint(0, 100),
-                                         'status': 'SYNCHRONIZED'
-                                     }
-                                 }
-                             }
+            mock_response = {'data': {
+                                 f"{device}.{target}": {
+                                    'content': {
+                                        'latest_valid_value': {
+                                            'value': randint(0, 100),
+                                            'status': 'SYNCHRONIZED'
+                                            }
+                                        }
+                                    }
+                                }
                              }
             
             return mock_response
