@@ -53,7 +53,7 @@ class BlueFTController:
         A flag used to set the log level.
     logger : logging.Logger
         The logger used to log messages.
-    pid_config_path : str
+    pid_calib_path : str
         Path to file storing PID calibration table.
     activate_maxigauge_reading : bool
         Toggles activation of pressure reading for Pfeiffer Maxigauge units (default is False).
@@ -339,7 +339,7 @@ class BlueFTController:
             return data["data"][f"{device}.{target}"]["content"]["latest_valid_value"]["status"]
 
         except:
-            self.logger.warn(f"Could not verify synchronization status")
+            self.logger.warning(f"Could not verify synchronization status")
             return 'INVALID'
 
     # general functions
@@ -412,6 +412,7 @@ class BlueFTController:
                 }
             }
             }
+            self.logger.debug(f'EMULATED, RESPONSE: {mock_response}')
 
             return mock_response
 
@@ -532,7 +533,7 @@ class BlueFTController:
 
         """
         device_id = f"mapper.heater_mappings_bftc.device.c{channel}"
-        self.logger.info(
+        self.logger.debug(
             f"Requesting value: {target_value}  from channel {channel}")
         data = self._get_value_request(device_id, target_value)
         try:
@@ -689,7 +690,7 @@ class BlueFTController:
             # Set the value
             self._set_value_request(self.mixing_chamber_heater, target, value)
             # Apply the value (otherwise it doesn't get synced to the temperature controller)
-            self.logger.info(f"Mixing Chamber Heater: Applying settings")
+            self.logger.debug(f"Mixing Chamber Heater: Applying settings")
             self._apply_values_request(self.mixing_chamber_heater)
             synced = self.check_heater_value_synced(target)
             self.logger.info(
@@ -804,9 +805,9 @@ class BlueFTController:
         """
         if self._has_mxc:
             # Sanity check, should be in microwatts
-            if power < 0 or power > 1000:
+            if power < 0 or power > 5000:
                 raise PIDConfigException(
-                    "Power should be in the range of 0 to 1000 microwatts"
+                    "Power should be in the range of 0 to 5000 microwatts"
                 )
             return self.set_mxc_heater_value("power", power / 1000000.0)
 
@@ -860,7 +861,9 @@ class BlueFTController:
                 warn(
                     'PID calibration not used, using current PID parameters stored on the device.')
 
-            return self.set_mxc_heater_value("setpoint", temperature / 1000.0)
+            if temperature >= 1e3:
+                raise Exception(f'Mixing chamber setpoint cannot be over 1K. You are trying to set {temperature} mK.')
+            return self.set_mxc_heater_value("setpoint", temperature)
 
         else:
             raise Exception('Mixing chamber channel ID not configured.')
@@ -961,7 +964,7 @@ class BlueFTController:
         if self._maxigauge_pressure:
             data = self._get_value_request(
                 device='driver.maxigauge.pressures', target=f'p{channel}')
-            self.logger.info(f"Requesting pressure from gauge P{channel}")
+            self.logger.debug(f"Requesting pressure from gauge P{channel}")
             try:
                 return float(self._get_value_from_data_response(
                     data, device='driver.maxigauge.pressures', target=f'p{channel}'
