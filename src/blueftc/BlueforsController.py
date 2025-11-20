@@ -219,7 +219,7 @@ class BlueFTController:
                 self._pid_calib_setpoints = pid_config[:, 0]
                 self._pid_calib_pid = pid_config[:, 1:]
                 sortind = np.argsort(self._pid_calib_setpoints)
-                self._pid_calib_setpoints = self._pid_calib_setpoints[sortind]
+                self._pid_calib_setpoints = self._pid_calib_setpoints[sortind] * 1e-3
                 self._pid_calib_pid = self._pid_calib_pid[sortind]
                 self._valid_pid_config = True
 
