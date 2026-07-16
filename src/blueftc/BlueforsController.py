@@ -126,7 +126,8 @@ class BlueFTController:
         debug: bool = False,
         pid_calib_path: str = None,
         activate_maxigauge_reading: bool = False,
-        emulate: bool = False
+        emulate: bool = False,
+        disable_safety_limit: bool = False,
     ):
         """
         Constructs all the necessary attributes for the BlueFTController object.
@@ -151,12 +152,16 @@ class BlueFTController:
                 Toggles activation of pressure reading for Pfeiffer Maxigauge units (default is False).
             emulate : bool, optional
                 Toggles emulation mode, where no actual communication with the control software is taking place.
+            disable_safety_limit : bool, optional
+                Allows to disable all safety limits, for example to apply high mixing chamber temperature setpoints. Defaults to False.
         """
         self.ip = ip
         self.key = key
         self.port = port
         self.mixing_chamber_channel_id = mixing_chamber_channel_id
-        self.mixing_chamber_heater = f"driver.bftc.data.heaters.heater_{mixing_chamber_heater_id}"
+        self.mixing_chamber_heater = (
+            f"driver.bftc.data.heaters.heater_{mixing_chamber_heater_id}"
+        )
         self.debug = debug
         self.pid_config_path = pid_calib_path
         self._setup_logging()
@@ -166,6 +171,7 @@ class BlueFTController:
         self._pid_calib_pid = None
         self._maxigauge_pressure = activate_maxigauge_reading
         self._emulate = emulate
+        self.disable_safety_limit = disable_safety_limit
 
         self._load_pid_config()
 
@@ -215,20 +221,21 @@ class BlueFTController:
         if self.pid_config_path is not None:
             try:
                 pid_config = np.loadtxt(
-                    self.pid_config_path, dtype='float', delimiter=',', skiprows=1)
+                    self.pid_config_path, dtype="float", delimiter=",", skiprows=1
+                )
                 self._pid_calib_setpoints = pid_config[:, 0]
                 self._pid_calib_pid = pid_config[:, 1:]
                 sortind = np.argsort(self._pid_calib_setpoints)
-                self._pid_calib_setpoints = self._pid_calib_setpoints[sortind] * 1e-3
+                self._pid_calib_setpoints = self._pid_calib_setpoints[sortind]
                 self._pid_calib_pid = self._pid_calib_pid[sortind]
                 self._valid_pid_config = True
 
-                self.logger.info(
-                    f'PID calibration loaded from {self.pid_config_path}')
+                self.logger.info(f"PID calibration loaded from {self.pid_config_path}")
 
             except FileNotFoundError as ex:
                 warn(
-                    f'Encountered error while loading pid config file: {ex}\nContinuing without automatic PID setpoint parameter adjustment.')
+                    f"Encountered error while loading pid config file: {ex}\nContinuing without automatic PID setpoint parameter adjustment."
+                )
 
     @staticmethod
     def _handle_status_response(status: str, target: str, set: bool = False) -> int:
@@ -249,33 +256,37 @@ class BlueFTController:
         value : int
             Code depending on parsed status value. 'INVALID' and 'DISCONNECTED' return 0. 'CHANGED', SYNCHRONIZED' and 'INDEPENDENT' return 1. 'QUEUED' returns 2. If type casted to bool, all acceptable status values cast to True, others to False.
         """
-        info = f" raised while setting '{target}'" if set else ''
+        info = f" raised while setting '{target}'" if set else ""
 
-        if status == 'INVALID':
+        if status == "INVALID":
             print(f"Warning{info}: The target value '{target}' is invalid!")
             return 0
 
-        elif status == 'CHANGED':
+        elif status == "CHANGED":
             return 1
 
-        elif status == 'DISCONNECTED':
+        elif status == "DISCONNECTED":
             print(
-                f"Warning{info}: The target device is disconnected! The target value '{target}' is not valid.")
+                f"Warning{info}: The target device is disconnected! The target value '{target}' is not valid."
+            )
             return 0
 
-        elif status == 'QUEUED':
-            print(f"Warning{info}: The target value '{target}' has been marked as 'QUEUED' and might not be synchronized between control software and physical device! Verify again.")
+        elif status == "QUEUED":
+            print(
+                f"Warning{info}: The target value '{target}' has been marked as 'QUEUED' and might not be synchronized between control software and physical device! Verify again."
+            )
             return 2
 
-        elif status == 'SYNCHRONIZED':
+        elif status == "SYNCHRONIZED":
             return 1
 
-        elif status == 'INDEPENDENT':
+        elif status == "INDEPENDENT":
             return 1
 
         else:
             print(
-                f"Warning{info}: Received invalid status response from control software. '{status}' is not a valid status.")
+                f"Warning{info}: Received invalid status response from control software. '{status}' is not a valid status."
+            )
             return 0
 
     def _get_value_from_data_response(self, data: str, device: str, target: str):
@@ -303,10 +314,16 @@ class BlueFTController:
 
         """
         try:
-            self._handle_status_response(status=self._get_synchronization_status(
-                data, device=device, target=target), target=target)
+            self._handle_status_response(
+                status=self._get_synchronization_status(
+                    data, device=device, target=target
+                ),
+                target=target,
+            )
 
-            return data["data"][f"{device}.{target}"]["content"]["latest_valid_value"]["value"]
+            return data["data"][f"{device}.{target}"]["content"]["latest_valid_value"][
+                "value"
+            ]
         except:
             self.logger.warn(f"Could not verify synchronization status")
             return False
@@ -336,11 +353,13 @@ class BlueFTController:
 
         """
         try:
-            return data["data"][f"{device}.{target}"]["content"]["latest_valid_value"]["status"]
+            return data["data"][f"{device}.{target}"]["content"]["latest_valid_value"][
+                "status"
+            ]
 
         except:
             self.logger.warning(f"Could not verify synchronization status")
-            return 'INVALID'
+            return "INVALID"
 
     # general functions
     def _get_value_request(self, device: str, target: str):
@@ -387,7 +406,10 @@ class BlueFTController:
                 entry = {
                     "data": {
                         "content": {
-                            "latest_valid_value": {"value": float("nan"), "status": "ERROR"}
+                            "latest_valid_value": {
+                                "value": float("nan"),
+                                "status": "ERROR",
+                            }
                         }
                     }
                 }
@@ -401,18 +423,19 @@ class BlueFTController:
 
         else:
             self.logger.debug(f"EMULATED, GET: {requestPath}")
-            mock_response = {'data': {
-                f"{device}.{target}": {
-                    'content': {
-                        'latest_valid_value': {
-                            'value': randint(0, 100),
-                            'status': 'SYNCHRONIZED'
+            mock_response = {
+                "data": {
+                    f"{device}.{target}": {
+                        "content": {
+                            "latest_valid_value": {
+                                "value": randint(0, 100),
+                                "status": "SYNCHRONIZED",
+                            }
                         }
                     }
                 }
             }
-            }
-            self.logger.debug(f'EMULATED, RESPONSE: {mock_response}')
+            self.logger.debug(f"EMULATED, RESPONSE: {mock_response}")
 
             return mock_response
 
@@ -448,8 +471,7 @@ class BlueFTController:
 
         # This is a two step process. First, we need to set the value and then we need to call the setter method.
         # This is the body for the setting request.
-        request_body = {
-            "data": {f"{device}.{target}": {"content": {"value": value}}}}
+        request_body = {"data": {f"{device}.{target}": {"content": {"value": value}}}}
         requestPath = (
             f"https://{self.ip}:{self.port}/values/?prettyprint=1&key={self.key}"
         )
@@ -467,8 +489,7 @@ class BlueFTController:
             return response.json()
 
         else:
-            self.logger.debug(
-                f"EMULATE, POST: {requestPath} - Body: {request_body}")
+            self.logger.debug(f"EMULATE, POST: {requestPath} - Body: {request_body}")
 
     def _apply_values_request(self, device: str):
         """
@@ -502,13 +523,12 @@ class BlueFTController:
                 requestPath,
                 data=json.dumps(request_body),
                 headers={"Content-Type": "application/json"},
-                verify=False
+                verify=False,
             )
             response.raise_for_status()
 
         else:
-            self.logger.debug(
-                f"EMULATE, POST: {requestPath} - Body: {request_body}")
+            self.logger.debug(f"EMULATE, POST: {requestPath} - Body: {request_body}")
 
     def get_channel_data(self, channel: int, target_value: str):
         """
@@ -533,8 +553,7 @@ class BlueFTController:
 
         """
         device_id = f"mapper.heater_mappings_bftc.device.c{channel}"
-        self.logger.debug(
-            f"Requesting value: {target_value}  from channel {channel}")
+        self.logger.debug(f"Requesting value: {target_value}  from channel {channel}")
         data = self._get_value_request(device_id, target_value)
         try:
             return self._get_value_from_data_response(
@@ -596,7 +615,7 @@ class BlueFTController:
             return self.get_channel_temperature(self.mixing_chamber_channel_id)
 
         else:
-            raise Exception('Mixing chamber channel ID not configured.')
+            raise Exception("Mixing chamber channel ID not configured.")
 
     def get_mxc_resistance(self) -> float:
         """
@@ -612,7 +631,7 @@ class BlueFTController:
             return self.get_channel_resistance(self.mixing_chamber_channel_id)
 
         else:
-            raise Exception('Mixing chamber channel ID not configured.')
+            raise Exception("Mixing chamber channel ID not configured.")
 
     def get_mxc_heater_value(self, target: str):
         """
@@ -645,7 +664,7 @@ class BlueFTController:
                 raise APIError(data)
 
         else:
-            raise Exception('Mixing chamber channel ID not configured.')
+            raise Exception("Mixing chamber channel ID not configured.")
 
     def check_heater_value_synced(self, target: str) -> bool:
         """
@@ -659,7 +678,15 @@ class BlueFTController:
         """
         data = self._get_value_request(self.mixing_chamber_heater, target)
         try:
-            return bool(self._handle_status_response(self._get_synchronization_status(data, device=self.mixing_chamber_heater, target=target), target=target, set=True))
+            return bool(
+                self._handle_status_response(
+                    self._get_synchronization_status(
+                        data, device=self.mixing_chamber_heater, target=target
+                    ),
+                    target=target,
+                    set=True,
+                )
+            )
 
         except KeyError as e:
             raise APIError(data)
@@ -685,20 +712,18 @@ class BlueFTController:
 
         """
         if self._has_mxc:
-            self.logger.info(
-                f"Mixing Chamber Heater: Setting {target} to {value}")
+            self.logger.info(f"Mixing Chamber Heater: Setting {target} to {value}")
             # Set the value
             self._set_value_request(self.mixing_chamber_heater, target, value)
             # Apply the value (otherwise it doesn't get synced to the temperature controller)
             self.logger.debug(f"Mixing Chamber Heater: Applying settings")
             self._apply_values_request(self.mixing_chamber_heater)
             synced = self.check_heater_value_synced(target)
-            self.logger.info(
-                f"Mixing Chamber Heater: Settings applied and synced")
+            self.logger.info(f"Mixing Chamber Heater: Settings applied and synced")
             return synced
 
         else:
-            raise Exception('Mixing chamber channel ID not configured.')
+            raise Exception("Mixing chamber channel ID not configured.")
 
     def get_mxc_heater_status(self) -> bool:
         """
@@ -714,7 +739,7 @@ class BlueFTController:
             return self.get_mxc_heater_value("active") == "1"
 
         else:
-            raise Exception('Mixing chamber channel ID not configured.')
+            raise Exception("Mixing chamber channel ID not configured.")
 
     def set_mxc_heater_status(self, newStatus: bool) -> bool:
         """
@@ -736,7 +761,7 @@ class BlueFTController:
             return self.set_mxc_heater_value("active", newValue)
 
         else:
-            raise Exception('Mixing chamber channel ID not configured.')
+            raise Exception("Mixing chamber channel ID not configured.")
 
     def toggle_mxc_heater(self, status: str) -> bool:
         """
@@ -765,11 +790,12 @@ class BlueFTController:
                 newValue = False
             else:
                 raise PIDConfigException(
-                    "Invalid status provided, must be 'on' or 'off'")
+                    "Invalid status provided, must be 'on' or 'off'"
+                )
             return self.set_mxc_heater_status(newValue)
 
         else:
-            raise Exception('Mixing chamber channel ID not configured.')
+            raise Exception("Mixing chamber channel ID not configured.")
 
     def get_mxc_heater_power(self) -> float:
         """
@@ -785,7 +811,7 @@ class BlueFTController:
             return float(self.get_mxc_heater_value("power")) * 1000000.0
 
         else:
-            raise Exception('Mixing chamber channel ID not configured.')
+            raise Exception("Mixing chamber channel ID not configured.")
 
     def set_mxc_heater_power(self, power: float) -> bool:
         """
@@ -812,7 +838,7 @@ class BlueFTController:
             return self.set_mxc_heater_value("power", power / 1000000.0)
 
         else:
-            raise Exception('Mixing chamber channel ID not configured.')
+            raise Exception("Mixing chamber channel ID not configured.")
 
     def get_mxc_heater_setpoint(self) -> float:
         """
@@ -828,11 +854,13 @@ class BlueFTController:
             return float(self.get_mxc_heater_value("setpoint"))
 
         else:
-            raise Exception('Mixing chamber channel ID not configured.')
+            raise Exception("Mixing chamber channel ID not configured.")
 
-    def set_mxc_heater_setpoint(self, temperature: float, use_pid_calib: bool = True) -> bool:
+    def set_mxc_heater_setpoint(
+        self, temperature: float, use_pid_calib: bool = True
+    ) -> bool:
         """
-        Set the setpoint of the mixing chamber heater in milli Kelvin. If a calibration table is given in the constructor and use_pid_calib 
+        Set the setpoint of the mixing chamber heater in milli Kelvin. If a calibration table is given in the constructor and use_pid_calib
         is true, the PID calibration closest to the desired setpoint will be applied before setting the setpoint.
 
         Parameters
@@ -851,22 +879,25 @@ class BlueFTController:
         """
         if self._has_mxc:
             if use_pid_calib and self._valid_pid_config:
-                closest = np.argmin(
-                    np.abs(self._pid_calib_setpoints - temperature))
+                closest = np.argmin(np.abs(self._pid_calib_setpoints - temperature))
                 self.logger.info(
-                    f'Using PID calibration for setpoint {self._pid_calib_setpoints[closest]} mK, closest available calibration to {temperature} mK.')
+                    f"Using PID calibration for setpoint {self._pid_calib_setpoints[closest]} mK, closest available calibration to {temperature} mK."
+                )
                 self.set_mxc_heater_pid_config(*self._pid_calib_pid[closest])
 
             else:
                 warn(
-                    'PID calibration not used, using current PID parameters stored on the device.')
+                    "PID calibration not used, using current PID parameters stored on the device."
+                )
 
-            if temperature >= 1e3:
-                raise Exception(f'Mixing chamber setpoint cannot be over 1K. You are trying to set {temperature} mK.')
-            return self.set_mxc_heater_value("setpoint", temperature)
+            if temperature >= 500 and not self.disable_safety_limit:
+                raise Exception(
+                    f"Mixing chamber setpoint cannot be over 500 mK. You are trying to set {temperature} mK. You can set disable_safety_limit = True when creating a BlueFTController object to override this."
+                )
+            return self.set_mxc_heater_value("setpoint", temperature * 1e-3)
 
         else:
-            raise Exception('Mixing chamber channel ID not configured.')
+            raise Exception("Mixing chamber channel ID not configured.")
 
     def get_mxc_heater_mode(self) -> bool:
         """
@@ -881,7 +912,7 @@ class BlueFTController:
             return self.get_mxc_heater_value("pid_mode") == "1"
 
         else:
-            raise Exception('Mixing chamber channel ID not configured.')
+            raise Exception("Mixing chamber channel ID not configured.")
 
     def set_mxc_heater_mode(self, toggle: bool) -> bool:
         """
@@ -903,7 +934,7 @@ class BlueFTController:
             return self.set_mxc_heater_value("pid_mode", newValue)
 
         else:
-            raise Exception('Mixing chamber channel ID not configured.')
+            raise Exception("Mixing chamber channel ID not configured.")
 
     def get_mxc_heater_pid_config(self) -> list:
         """
@@ -915,12 +946,14 @@ class BlueFTController:
             the pid parameters of the mixing chamber heater in the order [P, I, D]
         """
         pid = []
-        for j in ['p', 'i', 'd']:
-            pid.append(float(self.get_mxc_heater_value(f'pid_{j}')))
+        for j in ["p", "i", "d"]:
+            pid.append(float(self.get_mxc_heater_value(f"pid_{j}")))
 
         return pid
 
-    def set_mxc_heater_pid_config(self, p: float = None, i: float = None, d: float = None) -> bool:
+    def set_mxc_heater_pid_config(
+        self, p: float = None, i: float = None, d: float = None
+    ) -> bool:
         """
         Set the pid parameters of the mixing chamber heater.
 
@@ -938,9 +971,9 @@ class BlueFTController:
         bool
             True if the PID parameters were set successfully, False otherwise.
         """
-        for j, k in zip([p, i, d], ['p', 'i', 'd']):
+        for j, k in zip([p, i, d], ["p", "i", "d"]):
             if j is not None:
-                if not self.set_mxc_heater_value(f'pid_{k}', j):
+                if not self.set_mxc_heater_value(f"pid_{k}", j):
                     return False
 
         return True
@@ -963,15 +996,24 @@ class BlueFTController:
         """
         if self._maxigauge_pressure:
             data = self._get_value_request(
-                device='driver.maxigauge.pressures', target=f'p{channel}')
+                device="driver.maxigauge.pressures", target=f"p{channel}"
+            )
             self.logger.debug(f"Requesting pressure from gauge P{channel}")
             try:
-                return float(self._get_value_from_data_response(
-                    data, device='driver.maxigauge.pressures', target=f'p{channel}'
-                )) * 1e3
+                return (
+                    float(
+                        self._get_value_from_data_response(
+                            data,
+                            device="driver.maxigauge.pressures",
+                            target=f"p{channel}",
+                        )
+                    )
+                    * 1e3
+                )
             except KeyError as e:
                 raise APIError(data)
 
         else:
             raise Exception(
-                'Activate maxigauge reading toggle to read pressure values.')
+                "Activate maxigauge reading toggle to read pressure values."
+            )
