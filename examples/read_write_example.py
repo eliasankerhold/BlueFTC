@@ -36,3 +36,9 @@ print(f"MXC heater power: {controller.get_mxc_heater_power()} uW")
 print(f"MXC heater PID: {controller.get_mxc_heater_mode()}")
 print(f"MXC heater setpoint: {controller.get_mxc_heater_setpoint()} K")
 print(f"MXC heater PID config: {controller.get_mxc_heater_pid_config()}")
+
+
+# Write commands
+controller.set_mxc_heater_setpoint(0)
+controller.set_mxc_heater_mode(1)
+controller.set_mxc_heater_pid_config(p=1, i=1, d=1)
