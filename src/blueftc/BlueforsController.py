@@ -745,10 +745,10 @@ class BlueFTController:
         if self._has_mxc:
             self.logger.info(f"Mixing Chamber Heater: Setting {target} to {value}")
             # Set the value
-            self._set_value_request(self.mixing_chamber_heater, target, value)
+            self._set_value_request(self.mxc_heater_device, target, value)
             # Apply the value (otherwise it doesn't get synced to the temperature controller)
             self.logger.debug(f"Mixing Chamber Heater: Applying settings")
-            self._apply_values_request(self.mixing_chamber_heater)
+            self._apply_values_request(self.mxc_heater_device)
             synced = self.check_heater_value_synced(target)
             self.logger.info(f"Mixing Chamber Heater: Settings applied and synced")
             return synced
