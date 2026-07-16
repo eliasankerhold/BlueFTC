@@ -1,19 +1,35 @@
 from blueftc.BlueforsController import BlueFTController
-from credentials import IP_ADDRESS, PORT_NUMBER, API_KEY, MXC_ID, HEATER_ID, PID_CALIB_FILE
+from credentials import (
+    IP_ADDRESS,
+    PORT_NUMBER,
+    API_KEY,
+    MXC_ID,
+    HEATER_ID,
+    PID_CALIB_FILE,
+)
 
 import requests
 from requests.packages.urllib3.exceptions import InsecureRequestWarning
 
 requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
 
-controller = BlueFTController(ip=IP_ADDRESS, port=PORT_NUMBER, key=API_KEY, mixing_chamber_channel_id=MXC_ID, 
-							  mixing_chamber_heater_id=HEATER_ID, pid_calib_path=PID_CALIB_FILE)
+controller = BlueFTController(
+    ip=IP_ADDRESS,
+    port=PORT_NUMBER,
+    key=API_KEY,
+    mixing_chamber_channel_id=MXC_ID,
+    mixing_chamber_heater_id=HEATER_ID,
+    pid_calib_path=PID_CALIB_FILE,
+    emulate=True,
+    debug=True,
+    controller_type="bluefors",
+)
 
 active_channels = [1, 2, 5, 6, 8]
 
 for ch in active_channels:
-	print(f"Channel {ch} temp: {controller.get_channel_temperature(ch)} Kelvin")
-	print(f"Channel {ch} resistance: {controller.get_channel_resistance(ch)} Ohm")
+    print(f"Channel {ch} temp: {controller.get_channel_temperature(ch)} Kelvin")
+    print(f"Channel {ch} resistance: {controller.get_channel_resistance(ch)} Ohm")
 
 print(f"MXC heater status: {controller.get_mxc_heater_status()}")
 print(f"MXC heater power: {controller.get_mxc_heater_power()} uW")

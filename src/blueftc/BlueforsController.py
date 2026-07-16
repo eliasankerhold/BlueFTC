@@ -45,14 +45,14 @@ class BlueFTController:
         The key used for the requests.
     port : int
         The port used for the requests.
+    controller_type : str
+        Choose type of temperature controller from ['Bluefors', 'Lakeshore']
     mixing_chamber_channel_id : int
         The channel ID of the mixing chamber.
     mixing_chamber_heater : str
         The heater mapping for the mixing chamber.
     debug : bool
         A flag used to set the log level.
-    logger : logging.Logger
-        The logger used to log messages.
     pid_calib_path : str
         Path to file storing PID calibration table.
     activate_maxigauge_reading : bool
@@ -119,10 +119,11 @@ class BlueFTController:
     def __init__(
         self,
         ip: str,
+        key: str = None,
+        port: int = 49098,
+        controller_type: str = "bluefors",
         mixing_chamber_channel_id: int = None,
         mixing_chamber_heater_id: int = None,
-        port: int = 49098,
-        key: str = None,
         debug: bool = False,
         pid_calib_path: str = None,
         activate_maxigauge_reading: bool = False,
@@ -135,22 +136,24 @@ class BlueFTController:
         Parameters
         ----------
             ip : str
-                The IP address of the BlueFors Temperature Controller.
+                The IP address of the BlueFors Controller server.
+            key : str
+                The key used for the requests.
+            port : int
+                The port used for the requests.
+            controller_type : str
+                Choose type of temperature controller from ['Bluefors', 'Lakeshore']
             mixing_chamber_channel_id : int
-                The channel ID of the mixing chamber (default is None).
-            mixing_chamber_heater_id : int
-                The heater ID of the mixing chamber heater (default is None).
-            port : int, optional
-                The port used for the requests (default is 49099).
-            key : str, optional
-                The key used for the requests (default is None).
-            debug : bool, optional
-                A flag used to set the log level (default is False).
-            pid_config_path : str, optional
-                Filepath to csv file storing PID calibration table (default is None).
-            activate_maxigauge_reading : bool, optional
+                The channel ID of the mixing chamber.
+            mixing_chamber_heater : str
+                The heater mapping for the mixing chamber.
+            debug : bool
+                A flag used to set the log level.
+            pid_calib_path : str
+                Path to file storing PID calibration table.
+            activate_maxigauge_reading : bool
                 Toggles activation of pressure reading for Pfeiffer Maxigauge units (default is False).
-            emulate : bool, optional
+            emulate : bool
                 Toggles emulation mode, where no actual communication with the control software is taking place.
             disable_safety_limit : bool, optional
                 Allows to disable all safety limits, for example to apply high mixing chamber temperature setpoints. Defaults to False.
@@ -159,9 +162,7 @@ class BlueFTController:
         self.key = key
         self.port = port
         self.mixing_chamber_channel_id = mixing_chamber_channel_id
-        self.mixing_chamber_heater = (
-            f"driver.bftc.data.heaters.heater_{mixing_chamber_heater_id}"
-        )
+        self.mixing_chamber_heater_id = mixing_chamber_heater_id
         self.debug = debug
         self.pid_config_path = pid_calib_path
         self._setup_logging()
@@ -172,6 +173,36 @@ class BlueFTController:
         self._maxigauge_pressure = activate_maxigauge_reading
         self._emulate = emulate
         self.disable_safety_limit = disable_safety_limit
+
+        assert controller_type.lower() in [
+            "lakeshore",
+            "bluefors",
+        ], f"Set the type of physical temperature controller used in the system. Only 'Lakeshore' and 'Bluefors' controllers are supported."
+
+        self.controller_type = controller_type
+
+        self.controller_specific_paths = {
+            "bluefors": {
+                "sensor_data": "mapper.temperature_control.sensors.t#",
+                "mxc_heater": "driver.bftc.data.heaters.heater_#",
+                "pid_target": "pid_",
+            },
+            "lakeshore": {
+                "sensor_data": "mapper.temperature_control.sensors.t#",
+                "mxc_heater": "driver.lakeshore.settings.outputs.sample",
+                "pid_target": "",
+            },
+        }
+
+        self.sensor_data_device = self.controller_specific_paths[self.controller_type][
+            "sensor_data"
+        ]
+        self.mxc_heater_device = self.controller_specific_paths[self.controller_type][
+            "mxc_heater"
+        ].replace("#", str(self.mixing_chamber_heater_id))
+        self.pid_target = self.controller_specific_paths[self.controller_type][
+            "pid_target"
+        ]
 
         self._load_pid_config()
 
@@ -552,7 +583,7 @@ class BlueFTController:
             If the response does not contain the expected data.
 
         """
-        device_id = f"mapper.heater_mappings_bftc.device.c{channel}"
+        device_id = self.sensor_data_device.replace("#", str(channel))
         self.logger.debug(f"Requesting value: {target_value}  from channel {channel}")
         data = self._get_value_request(device_id, target_value)
         try:
@@ -655,10 +686,10 @@ class BlueFTController:
         """
         if self._has_mxc:
 
-            data = self._get_value_request(self.mixing_chamber_heater, target)
+            data = self._get_value_request(self.mxc_heater_device, target)
             try:
                 return self._get_value_from_data_response(
-                    data, device=self.mixing_chamber_heater, target=target
+                    data, device=self.mxc_heater_device, target=target
                 )
             except KeyError as e:
                 raise APIError(data)
@@ -676,12 +707,12 @@ class BlueFTController:
             The synchronization status of the target in the mixing chamber heater.
 
         """
-        data = self._get_value_request(self.mixing_chamber_heater, target)
+        data = self._get_value_request(self.mxc_heater_device, target)
         try:
             return bool(
                 self._handle_status_response(
                     self._get_synchronization_status(
-                        data, device=self.mixing_chamber_heater, target=target
+                        data, device=self.mxc_heater_device, target=target
                     ),
                     target=target,
                     set=True,
@@ -909,7 +940,7 @@ class BlueFTController:
             the pid mode of the mixing chamber heater. True if the pid mode is active, False otherwise.
         """
         if self._has_mxc:
-            return self.get_mxc_heater_value("pid_mode") == "1"
+            return self.get_mxc_heater_value(f"{self.pid_target}mode") == "1"
 
         else:
             raise Exception("Mixing chamber channel ID not configured.")
@@ -931,7 +962,7 @@ class BlueFTController:
         """
         if self._has_mxc:
             newValue = "1" if toggle else "0"
-            return self.set_mxc_heater_value("pid_mode", newValue)
+            return self.set_mxc_heater_value(f"{self.pid_target}mode", newValue)
 
         else:
             raise Exception("Mixing chamber channel ID not configured.")
@@ -947,7 +978,7 @@ class BlueFTController:
         """
         pid = []
         for j in ["p", "i", "d"]:
-            pid.append(float(self.get_mxc_heater_value(f"pid_{j}")))
+            pid.append(float(self.get_mxc_heater_value(f"{self.pid_target}{j}")))
 
         return pid
 
@@ -973,7 +1004,7 @@ class BlueFTController:
         """
         for j, k in zip([p, i, d], ["p", "i", "d"]):
             if j is not None:
-                if not self.set_mxc_heater_value(f"pid_{k}", j):
+                if not self.set_mxc_heater_value(f"{self.pid_target}{k}", j):
                     return False
 
         return True
