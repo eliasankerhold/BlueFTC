@@ -4,7 +4,7 @@
   <h1 align="center">BlueFTC</h1>
 
   <p align="center">
-    A simple Python interface for temperature controllers of Bluefors cryostats..
+    A simple Python interface for temperature controllers of Bluefors cryostats. For MATLAB users, there is a designated repo with a native MATLAB implementation of the same code: https://github.com/eliasankerhold/BlueFTC-matlab
   </p>
 </div>
 
